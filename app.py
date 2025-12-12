@@ -2,99 +2,123 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime, date, timedelta
 from pathlib import Path
-import gspread
-from google.oauth2.service_account import Credentials
+import json
 import random
-import base64
-import hashlib
-import hmac
+
+# ----------------- 파일 경로 -----------------
+CONFIG_PATH = Path("routine_config.json")
+LOG_PATH = Path("routine_log.csv")
+SUBJECTS_PATH = Path("subjects.json")
 
 # ----------------- 기본 설정 -----------------
 st.set_page_config(
-    page_title="Jason 루틴 플랫폼 (GSheet)",
+    page_title="Jason 루틴 플랫폼",
     page_icon="🎯",
     layout="wide",
 )
 
-def _decode_salt(s: str) -> bytes:
-    try:
-        return base64.b64decode(s)
-    except Exception:
-        return bytes.fromhex(s)
-
-def _verify_password(password: str) -> bool:
-    if "auth" not in st.secrets:
-        return False
-    auth = st.secrets["auth"]
-    if "password_hash" not in auth or "salt" not in auth:
-        return False
-    iterations = int(auth.get("iterations", 200_000))
-    salt = _decode_salt(auth["salt"])
-    derived = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, iterations)
-    expected = bytes.fromhex(auth["password_hash"])
-    return hmac.compare_digest(derived, expected)
-
-if "authenticated" not in st.session_state:
-    st.session_state.authenticated = False
-
-if "auth" not in st.secrets or "password_hash" not in st.secrets["auth"] or "salt" not in st.secrets["auth"]:
-    st.error("Secrets에 [auth] 설정이 필요합니다. (password_hash, salt, iterations)")
-    st.stop()
-
-if st.session_state.authenticated:
-    with st.sidebar:
-        if st.button("로그아웃"):
-            st.session_state.authenticated = False
-            st.rerun()
-else:
-    st.title("로그인")
-    password = st.text_input("비밀번호", type="password")
-    if st.button("로그인"):
-        if _verify_password(password):
-            st.session_state.authenticated = True
-            st.rerun()
-        else:
-            st.error("비밀번호가 올바르지 않습니다.")
-    st.stop()
-
 # ----------------- 커스텀 CSS -----------------
-st.markdown(
-    """
+st.markdown("""
 <style>
     .main .block-container { padding-top: 1.5rem; }
     [data-testid="stMetricValue"] { font-size: 1.8rem; font-weight: 700; }
+    
     .motivation-box {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         color: white; padding: 1.2rem; border-radius: 15px;
         text-align: center; font-size: 1.1rem; margin: 1rem 0;
     }
+    
+    .time-block {
+        background: #f8f9fa; border-radius: 10px; padding: 0.8rem;
+        margin: 0.3rem 0; border-left: 4px solid #3498db;
+    }
+    .time-block.morning { border-left-color: #f39c12; }
+    .time-block.evening { border-left-color: #9b59b6; }
+    .time-block.exercise { border-left-color: #27ae60; }
+    .time-block.study { border-left-color: #e74c3c; }
+    
+    .phase-indicator {
+        display: inline-block; padding: 0.3rem 0.8rem;
+        border-radius: 20px; font-weight: 600;
+    }
+    .phase-1 { background: #27ae60; color: white; }
+    .phase-2 { background: #f39c12; color: white; }
+    .phase-3 { background: #e67e22; color: white; }
+    .phase-4 { background: #e74c3c; color: white; }
+    
     .badge { display: inline-block; padding: 0.3rem 0.8rem;
              border-radius: 20px; font-weight: 600; margin: 0.2rem; }
     .badge-gold { background: linear-gradient(135deg, #f39c12, #e74c3c); color: white; }
     .badge-silver { background: linear-gradient(135deg, #bdc3c7, #95a5a6); color: white; }
     .badge-bronze { background: linear-gradient(135deg, #e67e22, #d35400); color: white; }
 </style>
-""",
-    unsafe_allow_html=True,
-)
+""", unsafe_allow_html=True)
 
-# ----------------- 상수/스키마 -----------------
-CONFIG_HEADERS = ["start_date", "auto_phase", "manual_phase", "target_exam"]
-LOG_HEADERS = [
-    "date",
-    "phase",
-    "day_type",
-    "mode",
-    "block",
-    "done",
-    "estimated_minutes",
-    "energy",
-    "focus",
-    "note",
-    "subject",
-]
-SUBJECT_HEADERS = ["name", "total_lectures", "completed_lectures", "active"]
 
+# ----------------- 유틸 함수 -----------------
+def load_config():
+    default = {
+        "start_date": date.today().isoformat(),
+        "auto_phase": True,
+        "manual_phase": 1,
+        "target_exam": "2027-01-01",
+    }
+    if CONFIG_PATH.exists():
+        try:
+            with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+                cfg = json.load(f)
+            for k, v in default.items():
+                cfg.setdefault(k, v)
+        except Exception:
+            cfg = default
+    else:
+        cfg = default
+    cfg["_start_date_obj"] = datetime.fromisoformat(cfg["start_date"]).date()
+    cfg["_target_exam_obj"] = datetime.fromisoformat(cfg["target_exam"]).date()
+    return cfg
+
+
+def save_config(cfg: dict):
+    writable = {k: cfg[k] for k in ["start_date", "auto_phase", "manual_phase", "target_exam"]}
+    with open(CONFIG_PATH, "w", encoding="utf-8") as f:
+        json.dump(writable, f, ensure_ascii=False, indent=2)
+
+
+def load_subjects():
+    default = [{"name": "민법", "total_lectures": 220, "completed_lectures": 0, "active": True}]
+    if SUBJECTS_PATH.exists():
+        try:
+            with open(SUBJECTS_PATH, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            return default
+    return default
+
+
+def save_subjects(subjects: list):
+    with open(SUBJECTS_PATH, "w", encoding="utf-8") as f:
+        json.dump(subjects, f, ensure_ascii=False, indent=2)
+
+
+def load_log() -> pd.DataFrame:
+    if LOG_PATH.exists():
+        df = pd.read_csv(LOG_PATH)
+        if "date" in df.columns:
+            df["date"] = pd.to_datetime(df["date"]).dt.date
+        for col in ["energy", "focus", "note", "subject"]:
+            if col not in df.columns:
+                df[col] = pd.NA
+        return df
+    return pd.DataFrame(columns=["date", "phase", "day_type", "mode", "block", "done",
+                                  "estimated_minutes", "energy", "focus", "note", "subject"])
+
+
+def save_log(df: pd.DataFrame):
+    df.to_csv(LOG_PATH, index=False)
+
+
+# ----------------- Phase / Week 계산 -----------------
 PHASE_LABELS = {
     1: "1단계 – 출석 + 공부 모양",
     2: "2단계 – 0.5~1회 감각",
@@ -103,164 +127,8 @@ PHASE_LABELS = {
 }
 
 DAY_TYPE_LABELS = {"weekday": "평일", "sat": "토요일", "sun": "일요일"}
-MODE_LABELS = {
-    "normal": "정상 모드",
-    "low": "저자극 모드 (10%)",
-    "off": "OFF 모드",
-}
+MODE_LABELS = {"normal": "정상 모드", "low": "저자극 모드 (10%)", "off": "OFF 모드"}
 
-DAILY_GRADE_HINT = "일일 등급 기준: S ≥ 4.6h, C ≥ 3.9h, B ≥ 3.1h, A ≥ 2.5h, 그 미만 D-"
-WEEKLY_GRADE_HINT = "주간 등급 기준: S ≥ 32h, C ≥ 27h, B ≥ 22h, A ≥ 18h, 그 미만 D-"
-
-DEFAULT_CONFIG = {
-    "start_date": date.today().isoformat(),
-    "auto_phase": True,
-    "manual_phase": 1,
-    "target_exam": "2027-01-01",
-}
-
-# ----------------- GSheet 클라이언트 -----------------
-
-def _parse_bool(value, default: bool = False) -> bool:
-    if value is None or pd.isna(value):
-        return default
-    if isinstance(value, bool):
-        return value
-    if isinstance(value, (int, float)):
-        return bool(value)
-    s = str(value).strip().lower()
-    if s in ("true", "1", "yes", "y", "t"):
-        return True
-    if s in ("false", "0", "no", "n", "f", ""):
-        return False
-    return default
-
-def get_client():
-    creds = Credentials.from_service_account_info(st.secrets["gcp_service_account"])
-    scoped = creds.with_scopes([
-        "https://www.googleapis.com/auth/spreadsheets",
-        "https://www.googleapis.com/auth/drive",
-    ])
-    return gspread.authorize(scoped)
-
-
-def get_workbook():
-    client = get_client()
-    if "gsheet" not in st.secrets or "spreadsheet_url" not in st.secrets["gsheet"]:
-        st.stop()
-    return client.open_by_url(st.secrets["gsheet"]["spreadsheet_url"])
-
-
-def ensure_worksheet(wb, name: str, headers: list):
-    try:
-        ws = wb.worksheet(name)
-    except gspread.WorksheetNotFound:
-        ws = wb.add_worksheet(title=name, rows=100, cols=len(headers) + 5)
-        ws.append_row(headers)
-    # 헤더가 없으면 추가
-    values = ws.get_all_values()
-    if not values:
-        ws.append_row(headers)
-    elif values[0][: len(headers)] != headers:
-        ws.insert_row(headers, 1)
-    return ws
-
-# ----------------- 저장/불러오기 -----------------
-
-def load_config():
-    wb = get_workbook()
-    ws = ensure_worksheet(wb, "config", CONFIG_HEADERS)
-    rows = ws.get_all_records()
-    cfg = rows[0] if rows else DEFAULT_CONFIG.copy()
-    # 기본값 보정
-    for k, v in DEFAULT_CONFIG.items():
-        cfg.setdefault(k, v)
-    cfg["auto_phase"] = _parse_bool(cfg.get("auto_phase", DEFAULT_CONFIG["auto_phase"]), default=DEFAULT_CONFIG["auto_phase"])
-    try:
-        cfg["manual_phase"] = int(float(cfg.get("manual_phase", DEFAULT_CONFIG["manual_phase"])))
-    except Exception:
-        cfg["manual_phase"] = int(DEFAULT_CONFIG["manual_phase"])
-    cfg["_start_date_obj"] = datetime.fromisoformat(str(cfg["start_date"])) .date()
-    cfg["_target_exam_obj"] = datetime.fromisoformat(str(cfg["target_exam"])) .date()
-    return cfg
-
-
-def save_config(cfg: dict):
-    wb = get_workbook()
-    ws = ensure_worksheet(wb, "config", CONFIG_HEADERS)
-    ws.clear()
-    ws.append_row(CONFIG_HEADERS)
-    row = [cfg.get(k, DEFAULT_CONFIG.get(k)) for k in CONFIG_HEADERS]
-    ws.append_row(row)
-
-
-def load_subjects():
-    wb = get_workbook()
-    ws = ensure_worksheet(wb, "subjects", SUBJECT_HEADERS)
-    rows = ws.get_all_records()
-    if not rows:
-        return [{"name": "민법", "total_lectures": 220, "completed_lectures": 0, "active": True}]
-    # 타입 보정
-    for r in rows:
-        try:
-            r["total_lectures"] = int(float(r.get("total_lectures", 0) or 0))
-        except Exception:
-            r["total_lectures"] = 0
-        try:
-            r["completed_lectures"] = int(float(r.get("completed_lectures", 0) or 0))
-        except Exception:
-            r["completed_lectures"] = 0
-        r["active"] = _parse_bool(r.get("active", True), default=True)
-    return rows
-
-
-def save_subjects(subjects: list):
-    wb = get_workbook()
-    ws = ensure_worksheet(wb, "subjects", SUBJECT_HEADERS)
-    ws.clear()
-    ws.append_row(SUBJECT_HEADERS)
-    for s in subjects:
-        ws.append_row([s.get(h, "") for h in SUBJECT_HEADERS])
-
-
-def load_log() -> pd.DataFrame:
-    wb = get_workbook()
-    ws = ensure_worksheet(wb, "log", LOG_HEADERS)
-    rows = ws.get_all_records()
-    if not rows:
-        return pd.DataFrame(columns=LOG_HEADERS)
-    df = pd.DataFrame(rows)
-    if "date" in df.columns:
-        df["date"] = pd.to_datetime(df["date"]).dt.date
-    for col in LOG_HEADERS:
-        if col not in df.columns:
-            df[col] = pd.NA
-    if "done" in df.columns:
-        df["done"] = df["done"].apply(lambda v: _parse_bool(v, default=False))
-    if "estimated_minutes" in df.columns:
-        df["estimated_minutes"] = pd.to_numeric(df["estimated_minutes"], errors="coerce").fillna(0).astype(int)
-    if "phase" in df.columns:
-        df["phase"] = pd.to_numeric(df["phase"], errors="coerce").fillna(0).astype(int)
-    for _col in ["energy", "focus"]:
-        if _col in df.columns:
-            df[_col] = pd.to_numeric(df[_col], errors="coerce").astype("Int64")
-    return df[LOG_HEADERS]
-
-
-def save_log(df: pd.DataFrame):
-    wb = get_workbook()
-    ws = ensure_worksheet(wb, "log", LOG_HEADERS)
-    ws.clear()
-    ws.append_row(LOG_HEADERS)
-    if df.empty:
-        return
-    # 날짜를 문자열로 변환
-    out_df = df.copy()
-    out_df["date"] = out_df["date"].astype(str)
-    rows = out_df[LOG_HEADERS].fillna("").values.tolist()
-    ws.append_rows(rows)
-
-# ----------------- Phase / Week 계산 -----------------
 
 def get_week_number(start_date: date, target_date: date) -> int:
     delta = (target_date - start_date).days
@@ -268,14 +136,10 @@ def get_week_number(start_date: date, target_date: date) -> int:
 
 
 def get_phase_by_week(week_num: int) -> int:
-    if week_num <= 1:
-        return 1
-    elif week_num <= 3:
-        return 2
-    elif week_num <= 6:
-        return 3
-    else:
-        return 4
+    if week_num <= 1: return 1
+    elif week_num <= 3: return 2
+    elif week_num <= 6: return 3
+    else: return 4
 
 
 def get_day_type(d: date) -> str:
@@ -287,127 +151,195 @@ def get_week_range(d: date):
     start = d - timedelta(days=d.weekday())
     return start, start + timedelta(days=6)
 
-# ----------------- 상세 시간표 -----------------
 
+# ----------------- 상세 시간표 (원본 글 기반) -----------------
 def get_detailed_schedule(phase: int, day_type: str, mode: str):
+    """
+    단계별 + 요일별 상세 시간표 반환
+    각 항목: (시간, 블록명, 카테고리, 예상시간(분), 설명)
+    """
     schedule = []
+    
     if mode == "off":
         return [("전일", "OFF 모드 (완전 휴식)", "rest", 0, "푹 쉬고 내일 복귀하세요")]
-
+    
+    # ========== 평일 스케줄 ==========
     if day_type == "weekday":
+        # 아침 루틴 (공통)
         schedule.append(("05:30", "기상 + 준비", "morning", 0, "물 한잔, 세수, 스트레칭"))
         schedule.append(("06:00-07:20", "출근 이동", "morning", 0, ""))
+        
         if phase >= 1:
-            schedule.append(("07:40-08:40", "☕ 아침 카페 출석", "study", 0, "카페 도착 = 오늘 50% 성공"))
+            schedule.append(("07:40-08:40", "☕ 아침 카페 출석", "study", 0, 
+                           "카페 도착 = 오늘 50% 성공"))
+        
         if phase >= 2:
-            schedule.append(("07:40-08:10", "   └ 전날 인강 다시 보기", "study", 30, "표시해둔 구간만 복습"))
-            schedule.append(("08:10-08:40", "   └ 복습용 문풀", "study", 30, "전날 강의 내용 5~7문제"))
+            schedule.append(("07:40-08:10", "   └ 전날 인강 다시 보기", "study", 30, 
+                           "표시해둔 구간만 복습"))
+            schedule.append(("08:10-08:40", "   └ 복습용 문풀", "study", 30, 
+                           "전날 강의 내용 5~7문제"))
+        
         schedule.append(("09:00-18:00", "💼 회사", "work", 0, ""))
         schedule.append(("18:00-20:00", "퇴근 + 저녁", "rest", 0, ""))
         schedule.append(("20:00-20:45", "저녁 휴식", "rest", 0, "유튜브/게임 가능 (공부 시작 전까지만)"))
+        
+        # 저녁 루틴 (단계별)
         if phase >= 1:
-            schedule.append(("20:45", "🪑 저녁 출석 (앉기)", "study", 0, "의자에 앉는 순간 70% 성공"))
+            schedule.append(("20:45", "🪑 저녁 출석 (앉기)", "study", 0, 
+                           "의자에 앉는 순간 70% 성공"))
+        
         if phase == 1:
-            schedule.append(("20:45-21:30", "   └ 인강 틀어놓기/책 펴놓기", "study", 45, "이해 0%여도 상관없음, 모양만"))
+            schedule.append(("20:45-21:30", "   └ 인강 틀어놓기/책 펴놓기", "study", 45, 
+                           "이해 0%여도 상관없음, 모양만"))
             schedule.append(("21:30-22:00", "🏋️ 운동 30분", "exercise", 0, "로잉/유산소"))
             schedule.append(("22:00-22:20", "🚿 샤워", "exercise", 0, "모드 전환 의식"))
-            schedule.append(("22:20-23:00", "책상 앞 유지", "study", 0, "민법책 펼쳐보기, 자서전 읽기, 멍"))
+            schedule.append(("22:20-23:00", "책상 앞 유지", "study", 0, 
+                           "민법책 펼쳐보기, 자서전 읽기, 멍"))
+        
         elif phase == 2:
-            schedule.append(("20:45-21:30", "📚 인강 1강", "study", 45, "제대로 들어보려고 노력"))
+            schedule.append(("20:45-21:30", "📚 인강 1강", "study", 45, 
+                           "제대로 들어보려고 노력"))
             schedule.append(("21:30-22:00", "🏋️ 운동 30분", "exercise", 0, ""))
             schedule.append(("22:00-22:20", "🚿 샤워", "exercise", 0, ""))
-            schedule.append(("22:20-23:00", "📚 인강 이어서 or 복습", "study", 40, "2번째 강의 시작해보기"))
+            schedule.append(("22:20-23:00", "📚 인강 이어서 or 복습", "study", 40, 
+                           "2번째 강의 시작해보기"))
+        
         elif phase == 3:
             schedule.append(("20:45-21:30", "📚 인강 1강", "study", 45, ""))
-            schedule.append(("21:30-21:50", "✏️ 1차 문풀", "study", 20, "방금 들은 1강 관련 4-6문제"))
+            schedule.append(("21:30-21:50", "✏️ 1차 문풀", "study", 20, 
+                           "방금 들은 1강 관련 4-6문제"))
             schedule.append(("21:50-22:20", "🏋️ 운동 30분", "exercise", 0, ""))
             schedule.append(("22:20-22:35", "🚿 샤워", "exercise", 0, ""))
             schedule.append(("22:35-23:20", "📚 인강 2강", "study", 45, ""))
-            schedule.append(("23:20-23:40", "📖 복습 + 정리", "study", 20, "오늘 내용 핵심 메모"))
-        elif phase == 4:
-            schedule.append(("20:45-21:30", "📚 인강 1강", "study", 45, "오늘 3강 중 1강"))
-            schedule.append(("21:30-21:50", "✏️ 1차 문풀", "study", 20, "1강 관련 4-6문제"))
-            schedule.append(("21:50-22:20", "🏋️ 운동 30분", "exercise", 0, "월/수/금 or 화/목"))
-            schedule.append(("22:20-22:35", "🚿 샤워 15분", "exercise", 0, "공부 모드 스위치 ON"))
+            schedule.append(("23:20-23:40", "📖 복습 + 정리", "study", 20, 
+                           "오늘 내용 핵심 메모"))
+        
+        elif phase == 4:  # 완성형
+            schedule.append(("20:45-21:30", "📚 인강 1강", "study", 45, 
+                           "오늘 3강 중 1강"))
+            schedule.append(("21:30-21:50", "✏️ 1차 문풀", "study", 20, 
+                           "1강 관련 4-6문제"))
+            schedule.append(("21:50-22:20", "🏋️ 운동 30분", "exercise", 0, 
+                           "월/수/금 or 화/목"))
+            schedule.append(("22:20-22:35", "🚿 샤워 15분", "exercise", 0, 
+                           "공부 모드 스위치 ON"))
             schedule.append(("22:35-23:20", "📚 인강 2강", "study", 45, ""))
-            schedule.append(("23:20-23:35", "✏️ 2차 문풀", "study", 15, "2강 관련 3-5문제"))
-            schedule.append(("23:35-00:20", "📚 인강 3강", "study", 45, "피곤하면 틀어놓기 모드 허용"))
-            schedule.append(("00:20-00:40", "✏️ 마감 문풀 + 정리", "study", 20, "핵심 3-5줄 메모, 내일 복습 포인트 표시"))
+            schedule.append(("23:20-23:35", "✏️ 2차 문풀", "study", 15, 
+                           "2강 관련 3-5문제"))
+            schedule.append(("23:35-00:20", "📚 인강 3강", "study", 45, 
+                           "피곤하면 틀어놓기 모드 허용"))
+            schedule.append(("00:20-00:40", "✏️ 마감 문풀 + 정리", "study", 20, 
+                           "핵심 3-5줄 메모, 내일 복습 포인트 표시"))
+        
         schedule.append(("00:40-01:00", "자유시간 + 취침 준비", "rest", 0, ""))
         schedule.append(("01:00", "💤 취침", "rest", 0, "05:30 기상 리듬 유지"))
+    
+    # ========== 주말 스케줄 ==========
     else:
         schedule.append(("09:00-09:30", "기상 + 씻기 + 정리", "morning", 0, ""))
+        
         if phase >= 1:
-            schedule.append(("09:30-10:30", "☕ 아침 복습 블록", "study", 60, "전날/한 주 누적 복습"))
+            schedule.append(("09:30-10:30", "☕ 아침 복습 블록", "study", 60, 
+                           "전날/한 주 누적 복습"))
+        
         if phase == 1:
-            schedule.append(("10:30-12:00", "📚 인강 틀기", "study", 60, "1강만 끝나도 대성공, 모양 유지"))
+            schedule.append(("10:30-12:00", "📚 인강 틀기", "study", 60, 
+                           "1강만 끝나도 대성공, 모양 유지"))
             schedule.append(("12:00-13:00", "점심 + 휴식", "rest", 0, ""))
-            schedule.append(("13:00-15:00", "📚 인강 or 유지", "study", 60, "한 블록만 앉아있어도 성공"))
+            schedule.append(("13:00-15:00", "📚 인강 or 유지", "study", 60, 
+                           "한 블록만 앉아있어도 성공"))
+        
         elif phase == 2:
             schedule.append(("10:30-12:00", "📚 인강 1~2강", "study", 90, ""))
             schedule.append(("12:00-13:00", "점심 + 휴식", "rest", 0, ""))
-            schedule.append(("13:00-15:00", "📚 인강 이어서", "study", 90, "하루 3-4강 목표"))
+            schedule.append(("13:00-15:00", "📚 인강 이어서", "study", 90, 
+                           "하루 3-4강 목표"))
             schedule.append(("15:30-17:30", "📖 가벼운 문풀/복습", "study", 60, ""))
+        
         elif phase == 3:
             schedule.append(("10:30-12:00", "📚 오전 인강 2강", "study", 90, ""))
             schedule.append(("12:00-13:00", "점심", "rest", 0, ""))
             schedule.append(("13:00-15:00", "📚 오후 전반 인강 2강", "study", 90, ""))
-            schedule.append(("15:00-16:00", "✏️ 문풀 1차", "study", 60, "오전 4강 관련 15-20문제"))
+            schedule.append(("15:00-16:00", "✏️ 문풀 1차", "study", 60, 
+                           "오전 4강 관련 15-20문제"))
             schedule.append(("16:00-17:30", "📚 오후 후반 인강", "study", 90, ""))
-        elif phase == 4:
-            schedule.append(("09:30-10:30", "☕ 아침 복습", "study", 60, "복습용 문풀 10-15문제"))
+        
+        elif phase == 4:  # 완성형 주말
+            schedule.append(("09:30-10:30", "☕ 아침 복습", "study", 60, 
+                           "복습용 문풀 10-15문제"))
             schedule.append(("10:30-12:00", "📚 오전 인강 2강", "study", 90, ""))
             schedule.append(("12:00-13:00", "점심 + 휴식", "rest", 0, "산책 10분"))
-            schedule.append(("13:00-14:30", "📚 오후 인강 2강", "study", 90, "이 시점 4/6강 완료"))
-            schedule.append(("14:30-15:30", "✏️ 문풀 1차", "study", 60, "오전 4강 관련 15-25문제"))
-            schedule.append(("15:30-17:00", "📚 오후 후반 인강 2강", "study", 90, "6강 마무리"))
+            schedule.append(("13:00-14:30", "📚 오후 인강 2강", "study", 90, 
+                           "이 시점 4/6강 완료"))
+            schedule.append(("14:30-15:30", "✏️ 문풀 1차", "study", 60, 
+                           "오전 4강 관련 15-25문제"))
+            schedule.append(("15:30-17:00", "📚 오후 후반 인강 2강", "study", 90, 
+                           "6강 마무리"))
             schedule.append(("17:00-18:00", "저녁 + 휴식", "rest", 0, ""))
-            schedule.append(("18:00-19:30", "✏️ 문풀 2차", "study", 90, "하루 전체 + 주간 누적 20-30문제"))
-            schedule.append(("19:30-20:00", "📝 정리 + 내일 준비", "study", 30, "핵심 메모, 내일 복습 포인트"))
+            schedule.append(("18:00-19:30", "✏️ 문풀 2차", "study", 90, 
+                           "하루 전체 + 주간 누적 20-30문제"))
+            schedule.append(("19:30-20:00", "📝 정리 + 내일 준비", "study", 30, 
+                           "핵심 메모, 내일 복습 포인트"))
+        
         schedule.append(("20:00 이후", "자유시간 + 산책", "rest", 0, ""))
+    
     return schedule
 
 
 def get_checkable_blocks(phase: int, day_type: str, mode: str):
+    """체크 가능한 블록만 추출 (시간 제외)"""
     schedule = get_detailed_schedule(phase, day_type, mode)
     blocks = []
     for item in schedule:
         time, name, category, minutes, desc = item
         if category in ["study", "exercise"] and minutes >= 0:
+            # 들여쓰기 된 항목은 서브블록이므로 이름에서 공백 제거
             clean_name = name.strip()
             if clean_name.startswith("└"):
                 clean_name = clean_name[1:].strip()
             blocks.append((clean_name, minutes, desc))
     return blocks
 
-# ----------------- 동기부여 메시지 -----------------
 
+# ----------------- 기록 기반 헬퍼 -----------------
 def get_logged_day_context(log_df: pd.DataFrame, target_date: date):
+    """해당 날짜에 이미 저장된 phase/day_type/mode가 있으면 반환"""
     if log_df.empty:
-        return None
-    if "date" not in log_df.columns:
         return None
     mask = log_df["date"] == target_date
     if not mask.any():
         return None
     row = log_df[mask].iloc[0]
-    try:
-        return {"phase": int(row["phase"]), "day_type": row["day_type"], "mode": row["mode"]}
-    except Exception:
-        return None
+    return {"phase": int(row["phase"]), "day_type": row["day_type"], "mode": row["mode"]}
 
+
+def get_lecture_increment(block_name: str) -> int:
+    """블록명으로 완료 강의 수 추정 (완성형 연결)"""
+    name = str(block_name)
+    if "인강 3강" in name:  # 3강은 하루의 3번째 강의를 뜻하므로 +1
+        return 1
+    if "인강 2강" in name:
+        # '오전/오후 인강 2강'은 2개 강의 블록으로 간주
+        return 2 if "오전 인강 2강" in name or "오후 인강 2강" in name or "후반 인강 2강" in name else 1
+    if "인강 1강" in name or "인강 1~2강" in name or "인강 이어서" in name:
+        return 1
+    return 0
+
+
+def lecture_credits_from_rows(rows: pd.DataFrame) -> int:
+    if rows.empty:
+        return 0
+    return sum(get_lecture_increment(b) for b in rows.loc[rows["done"] == True, "block"])
+
+
+# ----------------- 동기부여 메시지 -----------------
 MOTIVATION_MESSAGES = {
-    "streak_high": [
-        "🔥 {streak}일 연속! 루틴이 뼛속에 새겨지는 중!",
-        "💪 {streak}일째! 이게 진짜 실력이야!",
-    ],
+    "streak_high": ["🔥 {streak}일 연속! 루틴이 뼛속에 새겨지는 중!",
+                    "💪 {streak}일째! 이게 진짜 실력이야!"],
     "streak_start": ["👊 {streak}일째! 좋은 시작이야!", "🌱 습관이 자라는 중!"],
     "low_mode": ["🌿 10%라도 0%보다 10배야!", "☘️ 저자극도 출석이야!"],
-    "default": [
-        "📚 앉았어! 이미 50% 성공!",
-        "🎯 출석이 곧 실력!",
-        "💡 앉기만 하면 공부량은 자동으로 늘어나!",
-    ],
+    "default": ["📚 앉았어! 이미 50% 성공!", "🎯 출석이 곧 실력!",
+                "💡 앉기만 하면 공부량은 자동으로 늘어나!"],
 }
 
 
@@ -420,9 +352,12 @@ def get_motivation_message(streak: int, mode: str = "normal"):
         return random.choice(MOTIVATION_MESSAGES["streak_start"]).format(streak=streak)
     return random.choice(MOTIVATION_MESSAGES["default"])
 
-# ----------------- 등급 -----------------
 
+# ----------------- 등급 계산 -----------------
 def get_daily_grade(hours: float) -> str:
+    """
+    주간 A/B/C 기준(18/22/27/32h)을 7일로 나눈 값에 맞춰 일일 등급 산정.
+    """
     if hours < 2.5:
         return "D-"
     elif hours < 3.1:
@@ -434,26 +369,17 @@ def get_daily_grade(hours: float) -> str:
     else:
         return "S"
 
+
+DAILY_GRADE_HINT = "일일 등급 기준: S ≥ 4.6h, C ≥ 3.9h, B ≥ 3.1h, A ≥ 2.5h, 그 미만 D-"
+WEEKLY_GRADE_HINT = "주간 등급 기준: S ≥ 32h, C ≥ 27h, B ≥ 22h, A ≥ 18h, 그 미만 D-"
+
+
 # ----------------- 과목/진도 계산 -----------------
-
-def get_lecture_increment(block_name: str) -> int:
-    name = str(block_name)
-    if "인강 3강" in name:
-        return 1
-    if "인강 2강" in name:
-        return 2 if ("오전 인강 2강" in name or "오후 인강 2강" in name or "후반 인강 2강" in name) else 1
-    if "인강 1강" in name or "인강 1~2강" in name or "인강 이어서" in name:
-        return 1
-    return 0
-
-
-def lecture_credits_from_rows(rows: pd.DataFrame) -> int:
-    if rows.empty:
-        return 0
-    return sum(get_lecture_increment(b) for b in rows.loc[rows["done"] == True, "block"])
-
-
 def compute_subject_progress(log_df: pd.DataFrame) -> dict:
+    """
+    로그에서 과목별 완료 강의 수를 집계.
+    subject가 비어있으면 건너뜀.
+    """
     progress = {}
     if log_df.empty or "subject" not in log_df.columns:
         return progress
@@ -465,6 +391,9 @@ def compute_subject_progress(log_df: pd.DataFrame) -> dict:
 
 
 def sync_subjects_with_log(log_df: pd.DataFrame, subjects: list) -> list:
+    """
+    로그 기반 완료 강의 수를 과목 목록에 반영 (기존 값보다 커질 때만).
+    """
     if not subjects:
         return subjects
     progress = compute_subject_progress(log_df)
@@ -480,16 +409,14 @@ def sync_subjects_with_log(log_df: pd.DataFrame, subjects: list) -> list:
         save_subjects(subjects)
     return subjects
 
-# ----------------- 배지 -----------------
 
+# ----------------- 배지 시스템 -----------------
 def get_badges(log_df, subjects, streak):
     badges = []
-    if streak >= 30:
-        badges.append(("🏆 30일 연속", "gold"))
-    elif streak >= 14:
-        badges.append(("🥈 14일 연속", "silver"))
-    elif streak >= 7:
-        badges.append(("🥉 7일 연속", "bronze"))
+    if streak >= 30: badges.append(("🏆 30일 연속", "gold"))
+    elif streak >= 14: badges.append(("🥈 14일 연속", "silver"))
+    elif streak >= 7: badges.append(("🥉 7일 연속", "bronze"))
+    
     for s in subjects:
         if s["completed_lectures"] >= s["total_lectures"]:
             badges.append((f"📚 {s['name']} 완주!", "gold"))
@@ -497,17 +424,19 @@ def get_badges(log_df, subjects, streak):
             badges.append((f"📖 {s['name']} 50%", "silver"))
     return badges
 
-# ----------------- 히트맵 -----------------
 
+# ----------------- 히트맵 -----------------
 def render_heatmap(log_df, weeks=12):
     today = date.today()
     start = today - timedelta(weeks=weeks, days=today.weekday())
+    
     daily_data = {}
     if not log_df.empty:
         for d in pd.date_range(start, today):
             mask = log_df["date"] == d.date()
             if mask.any():
                 daily_data[d.date()] = log_df[mask]["estimated_minutes"].sum()
+    
     cols = st.columns(weeks)
     for w in range(weeks):
         ws = start + timedelta(weeks=w)
@@ -521,12 +450,10 @@ def render_heatmap(log_df, weeks=12):
                     c = "#00d4aa" if m >= 240 else "#00a884" if m >= 120 else "#007a5e" if m >= 30 else "#004d3d"
                 else:
                     c = "#2d3436"
-                st.markdown(
-                    f'<div style="width:12px;height:12px;background:{c};'
-                    f'border-radius:2px;margin:1px;display:inline-block;" '
-                    f'title="{cd}"></div>',
-                    unsafe_allow_html=True,
-                )
+                st.markdown(f'<div style="width:12px;height:12px;background:{c};'
+                           f'border-radius:2px;margin:1px;display:inline-block;" '
+                           f'title="{cd}"></div>', unsafe_allow_html=True)
+
 
 # ----------------- 세션 초기화 -----------------
 if "config" not in st.session_state:
@@ -538,41 +465,43 @@ if "subjects" not in st.session_state:
 
 config = st.session_state.config
 log_df = st.session_state.log_df
+# 이전 세션에서 subject 컬럼이 없던 경우를 대비해 보정
+if "subject" not in log_df.columns:
+    log_df["subject"] = pd.NA
+    st.session_state.log_df = log_df
 subjects = sync_subjects_with_log(log_df, st.session_state.subjects)
 st.session_state.subjects = subjects
 today = date.today()
 
+
 # ----------------- 사이드바 -----------------
 with st.sidebar:
     st.markdown("## ⚙️ 설정")
+    
     selected_date = st.date_input("📅 작업할 날짜", value=today)
-
     saved_ctx = get_logged_day_context(log_df, selected_date)
     use_saved_ctx = False
     if saved_ctx:
-        st.info(
-            f"📌 이 날짜에는 기록이 있습니다: Phase {saved_ctx['phase']}, "
-            f"{DAY_TYPE_LABELS.get(saved_ctx['day_type'], saved_ctx['day_type'])}, "
-            f"{MODE_LABELS.get(saved_ctx['mode'], saved_ctx['mode'])}"
-        )
+        st.info(f"📌 이 날짜에는 기록이 있습니다: Phase {saved_ctx['phase']}, {DAY_TYPE_LABELS.get(saved_ctx['day_type'], saved_ctx['day_type'])}, {MODE_LABELS.get(saved_ctx['mode'], saved_ctx['mode'])}")
         use_saved_ctx = st.checkbox("기록된 설정 우선 사용", True, key="use_saved_ctx")
-
+    
+    # ★ 핵심 수정: selected_date 기준으로 Phase 계산
     selected_week = get_week_number(config["_start_date_obj"], selected_date)
     selected_phase_auto = get_phase_by_week(selected_week)
-
-    day_type_options = list(DAY_TYPE_LABELS.keys())
+    
+    # 요일 타입: 기록이 있으면 기본을 기록에 맞추고, 필요 시 잠금
     default_day_type = get_day_type(selected_date)
     if saved_ctx:
-        default_day_type = saved_ctx.get("day_type", default_day_type)
-    day_type_index = day_type_options.index(default_day_type) if default_day_type in day_type_options else 0
+        default_day_type = saved_ctx["day_type"]
     day_type = st.selectbox(
         "요일 타입",
-        options=day_type_options,
-        index=day_type_index,
+        options=list(DAY_TYPE_LABELS.keys()),
+        index=list(DAY_TYPE_LABELS.keys()).index(default_day_type),
         format_func=lambda x: DAY_TYPE_LABELS[x],
         disabled=bool(saved_ctx and use_saved_ctx),
     )
-
+    
+    # 단계 선택 (자동 추천 또는 수동)
     if saved_ctx and use_saved_ctx:
         effective_phase = int(saved_ctx["phase"])
         st.info(f"기록된 단계 사용: {PHASE_LABELS[effective_phase]}")
@@ -583,31 +512,26 @@ with st.sidebar:
             options=phase_options,
             index=phase_options.index(selected_phase_auto),
             format_func=lambda x: PHASE_LABELS[x],
-            help=f"자동 추천: {selected_week}주차 → {selected_phase_auto}단계",
+            help=f"자동 추천: {selected_week}주차 → {selected_phase_auto}단계"
         )
     else:
         effective_phase = config["manual_phase"]
         st.info(f"수동 고정: {PHASE_LABELS[effective_phase]}")
-
-    mode_options = list(MODE_LABELS.keys())
-    default_mode = saved_ctx.get("mode") if saved_ctx else mode_options[0]
-    if default_mode not in mode_options:
-        default_mode = mode_options[0]
-    mode = st.radio(
-        "모드",
-        mode_options,
-        index=mode_options.index(default_mode),
-        format_func=lambda x: MODE_LABELS[x],
-        horizontal=True,
-        disabled=bool(saved_ctx and use_saved_ctx),
-    )
-
+    
+    # 모드: 기록이 있으면 우선 사용
+    default_mode = saved_ctx["mode"] if saved_ctx else list(MODE_LABELS.keys())[0]
+    mode = st.radio("모드", list(MODE_LABELS.keys()), 
+                    index=list(MODE_LABELS.keys()).index(default_mode),
+                    format_func=lambda x: MODE_LABELS[x], horizontal=True,
+                    disabled=bool(saved_ctx and use_saved_ctx))
+    
     st.markdown("---")
     st.caption(f"📅 {selected_date} | {selected_week}주차")
     phase_emoji = ["", "🟢", "🟡", "🟠", "🔴"][effective_phase]
     st.markdown(f"**{phase_emoji} {PHASE_LABELS[effective_phase]}**")
 
-# ----------------- 출석 streak -----------------
+
+# ----------------- 출석 streak 계산 -----------------
 unique_dates = sorted(log_df["date"].unique(), reverse=True) if not log_df.empty else []
 streak = 0
 for d in unique_dates:
@@ -621,19 +545,24 @@ for d in unique_dates:
     else:
         break
 
-# ----------------- 메인 -----------------
-st.markdown("# 🎯 Jason 루틴 플랫폼 (GSheet)")
 
-tab_dashboard, tab_routine, tab_subjects, tab_analysis, tab_philosophy, tab_settings = st.tabs(
-    ["🏠 대시보드", "✅ 오늘 루틴", "📚 과목 관리", "📊 분석", "📜 철학", "⚙️ 설정"]
-)
+# ----------------- 메인 -----------------
+st.markdown("# 🎯 Jason 루틴 플랫폼")
+
+tab_dashboard, tab_routine, tab_subjects, tab_analysis, tab_philosophy, tab_settings = st.tabs([
+    "🏠 대시보드", "✅ 오늘 루틴", "📚 과목 관리", "📊 분석", "📜 철학", "⚙️ 설정"
+])
+
 
 # ==================== 대시보드 ====================
 with tab_dashboard:
     st.markdown(f"## 📊 {selected_date} 현황")
+    
     col1, col2, col3, col4, col5 = st.columns(5)
+    
     with col1:
         st.metric("🔥 연속 출석", f"{streak}일")
+    
     with col2:
         checkable = get_checkable_blocks(effective_phase, day_type, mode)
         mask_today = log_df["date"] == selected_date if not log_df.empty else pd.Series([False])
@@ -641,33 +570,34 @@ with tab_dashboard:
         total = max(len(checkable), 1)
         progress = int((today_done / total) * 100)
         st.metric("📈 진행률", f"{progress}%")
+    
     with col3:
         today_min = log_df[mask_today]["estimated_minutes"].sum() if not log_df.empty else 0
         st.metric("⏱️ 공부시간", f"{today_min // 60}시간 {today_min % 60}분")
+    
     with col4:
         today_grade = get_daily_grade(today_min / 60 if today_min else 0)
         st.metric("🏅 일일 등급", today_grade, help=DAILY_GRADE_HINT)
+    
     with col5:
         phase_emoji = ["", "🟢", "🟡", "🟠", "🔴"][effective_phase]
         st.metric("🎯 Phase", f"{phase_emoji} {effective_phase}단계")
-
+    
+    # 공부시간 설명
     with st.expander("⏱️ 공부시간 계산 방법"):
-        st.markdown(
-            """
+        st.markdown("""
         - **블록별 예상 시간**을 합산합니다
         - 체크한 블록의 `예상 시간`만 카운트됩니다
         - 출석/운동/샤워 등은 0분으로 계산 (공부시간 아님)
         - 인강 1강 = 45분, 문풀 = 15~20분 등 기준
-        """
-        )
-
-    st.markdown(
-        f"""
+        """)
+    
+    # 동기부여
+    st.markdown(f"""
     <div class="motivation-box">{get_motivation_message(streak, mode)}</div>
-    """,
-        unsafe_allow_html=True,
-    )
-
+    """, unsafe_allow_html=True)
+    
+    # 과목 진도
     st.markdown("### 📚 과목별 진도")
     active_subj = [s for s in subjects if s.get("active", True)]
     if active_subj:
@@ -680,22 +610,25 @@ with tab_dashboard:
                 st.caption(f"{s['completed_lectures']}/{s['total_lectures']}강 ({p}%)")
     else:
         st.info("📚 '과목 관리'에서 과목을 추가하세요!")
-
+    
+    # 배지
     badges = get_badges(log_df, subjects, streak)
     if badges:
         st.markdown("### 🏆 배지")
-        st.markdown(
-            " ".join([f'<span class="badge badge-{t}">{n}</span>' for n, t in badges]),
-            unsafe_allow_html=True,
-        )
-
+        st.markdown(" ".join([f'<span class="badge badge-{t}">{n}</span>' for n, t in badges]), 
+                   unsafe_allow_html=True)
+    
+    # 히트맵
     st.markdown("### 📅 12주 출석 히트맵")
     render_heatmap(log_df, 12)
     st.caption("💚 진할수록 공부 많이 함")
 
+
 # ==================== 오늘 루틴 ====================
 with tab_routine:
     st.markdown(f"## ✅ {selected_date} 루틴")
+    
+    # Phase 정보
     phase_desc = {
         1: "🟢 **1단계**: 앉기만 해도 성공! 인강 틀어놓기/책 펴놓기 허용",
         2: "🟡 **2단계**: 하루 1~3강 도전. 힘들면 틀어놓기 모드 OK",
@@ -703,61 +636,83 @@ with tab_routine:
         4: "🔴 **4단계(완성형)**: 평일 3강+문풀, 주말 6강+문풀",
     }
     st.info(phase_desc[effective_phase])
-
+    
+    # 상세 시간표 표시
+    st.markdown("### 📋 상세 시간표")
     schedule = get_detailed_schedule(effective_phase, day_type, mode)
+    
+    # 기존 기록 로드
     mask_today = log_df["date"] == selected_date if not log_df.empty else pd.Series([False])
     today_existing = log_df[mask_today] if not log_df.empty else pd.DataFrame()
-
+    
+    # 오늘 과목 선택 (공부 블록에 적용)
     st.markdown("### 📚 오늘 공부 과목")
     active_subj = [s for s in subjects if s.get("active", True)]
     subject_options = [s["name"] for s in active_subj]
     prev_subject = None
     if not today_existing.empty and today_existing["subject"].notna().any():
         prev_subject = str(today_existing["subject"].dropna().iloc[0])
-    subj_index = subject_options.index(prev_subject) if prev_subject in subject_options else 0 if subject_options else 0
+    subj_index = 0
+    if prev_subject and prev_subject in subject_options:
+        subj_index = subject_options.index(prev_subject)
     selected_subject = st.selectbox(
         "기록에 남길 과목 (공부 블록에만 적용)",
         options=subject_options if subject_options else ["(과목 없음: 과목 관리에서 추가)"],
         index=subj_index if subject_options else 0,
         disabled=not bool(subject_options),
-        key="routine_subject",
+        key="routine_subject"
     )
-
+    
+    # 시간표를 카테고리별로 표시
     checkbox_states = {}
     block_meta = {}
+    total_est_minutes = 0
+    
     for time, name, category, minutes, desc in schedule:
         clean_name = name.strip()
         if clean_name.startswith("└"):
             clean_name = clean_name[1:].strip()
         block_meta[clean_name] = {"minutes": minutes, "category": category}
-        cat_colors = {"morning": "🌅", "study": "📚", "exercise": "💪", "work": "💼", "rest": "😴"}
+        
+        # 색상 지정
+        cat_colors = {"morning": "🌅", "study": "📚", "exercise": "💪", 
+                      "work": "💼", "rest": "😴"}
         emoji = cat_colors.get(category, "")
+        
         if category in ["study", "exercise"]:
+            # 체크 가능한 항목
             prev = False
             if not today_existing.empty:
                 prev_rows = today_existing[today_existing["block"] == clean_name]
                 if not prev_rows.empty:
                     prev = bool(prev_rows.iloc[-1]["done"])
+            
             time_label = f" [{minutes}분]" if minutes > 0 else ""
             desc_label = f" - {desc}" if desc else ""
-            checkbox_states[clean_name] = st.checkbox(
-                f"**{time}** {name}{time_label}{desc_label}",
-                value=prev,
-                key=f"cb_{clean_name}",
-            )
+            
+            col1, col2 = st.columns([3, 1])
+            with col1:
+                checkbox_states[clean_name] = st.checkbox(
+                    f"**{time}** {name}{time_label}{desc_label}", 
+                    value=prev, key=f"cb_{clean_name}"
+                )
+            with col2:
+                if minutes > 0:
+                    total_est_minutes += minutes if prev else 0
         else:
-            st.markdown(
-                f"<div style='color:#888; padding:0.3rem 0;'>{emoji} **{time}** {name}</div>",
-                unsafe_allow_html=True,
-            )
-
+            # 체크 불가능한 항목 (정보만 표시)
+            st.markdown(f"<div style='color:#888; padding:0.3rem 0;'>"
+                       f"{emoji} **{time}** {name}</div>", 
+                       unsafe_allow_html=True)
+    
+    # 예상 총 시간 표시
     checkable = get_checkable_blocks(effective_phase, day_type, mode)
     total_possible = sum([m for _, m, _ in checkable])
-    st.markdown(
-        f"---\n**📊 체크 시 예상 공부시간: {total_possible}분 ({total_possible//60}시간 {total_possible%60}분)**"
-    )
-
+    st.markdown(f"---\n**📊 체크 시 예상 공부시간: {total_possible}분 ({total_possible//60}시간 {total_possible%60}분)**")
+    
+    # 컨디션 입력
     st.markdown("### 🧠 컨디션")
+    
     prev_energy, prev_focus, prev_note = 3, 3, ""
     if not today_existing.empty:
         if today_existing["energy"].notna().any():
@@ -766,54 +721,39 @@ with tab_routine:
             prev_focus = int(today_existing["focus"].dropna().iloc[0])
         if today_existing["note"].notna().any():
             prev_note = str(today_existing["note"].dropna().iloc[0])
+    
     c1, c2 = st.columns(2)
     with c1:
         energy = st.slider("에너지 💪", 1, 5, prev_energy)
     with c2:
         focus = st.slider("집중도 🎯", 1, 5, prev_focus)
+    
     note = st.text_area("한 줄 메모", prev_note, height=60, placeholder="오늘 느낀 점...")
-
+    
     if st.button("💾 저장하기", type="primary"):
         log_df = log_df[~(log_df["date"] == selected_date)]
+        
         if mode == "off":
-            new_rows = [
-                {
-                    "date": selected_date,
-                    "phase": effective_phase,
-                    "day_type": day_type,
-                    "mode": mode,
-                    "block": "OFF",
-                    "done": True,
-                    "estimated_minutes": 0,
-                    "energy": energy,
-                    "focus": focus,
-                    "note": note,
-                    "subject": pd.NA,
-                }
-            ]
+            new_rows = [{"date": selected_date, "phase": effective_phase, "day_type": day_type,
+                        "mode": mode, "block": "OFF", "done": True, "estimated_minutes": 0,
+                        "energy": energy, "focus": focus, "note": note, "subject": pd.NA}]
         else:
             new_rows = []
             for block, done in checkbox_states.items():
                 meta = block_meta.get(block, {})
                 est_min = meta.get("minutes", 0)
                 subj_val = selected_subject if meta.get("category") == "study" and subject_options else pd.NA
-                new_rows.append(
-                    {
-                        "date": selected_date,
-                        "phase": effective_phase,
-                        "day_type": day_type,
-                        "mode": mode,
-                        "block": block,
-                        "done": bool(done),
-                        "estimated_minutes": est_min if done else 0,
-                        "energy": energy,
-                        "focus": focus,
-                        "note": note,
-                        "subject": subj_val,
-                    }
-                )
+                new_rows.append({
+                    "date": selected_date, "phase": effective_phase, "day_type": day_type,
+                    "mode": mode, "block": block, "done": bool(done),
+                    "estimated_minutes": est_min if done else 0,
+                    "energy": energy, "focus": focus, "note": note,
+                    "subject": subj_val
+                })
+        
         if new_rows:
             log_df = pd.concat([log_df, pd.DataFrame(new_rows)], ignore_index=True)
+        
         st.session_state.log_df = log_df
         subjects = sync_subjects_with_log(log_df, subjects)
         st.session_state.subjects = subjects
@@ -821,10 +761,12 @@ with tab_routine:
         st.success("✅ 저장 완료!")
         st.rerun()
 
+
 # ==================== 과목 관리 ====================
 with tab_subjects:
     st.markdown("## 📚 과목 관리")
     st.caption("강의 수는 유동적으로 변경 가능, 여러 과목 동시 진행 OK")
+    
     for idx, s in enumerate(subjects):
         with st.expander(f"📖 {s['name']} ({s['completed_lectures']}/{s['total_lectures']}강)", expanded=True):
             c1, c2, c3 = st.columns([2, 1, 1])
@@ -833,9 +775,9 @@ with tab_subjects:
             with c2:
                 nt = st.number_input("총 강의 수", value=s["total_lectures"], min_value=1, key=f"st_{idx}")
             with c3:
-                nc = st.number_input(
-                    "완료 강의 수", value=s["completed_lectures"], min_value=0, max_value=nt, key=f"sc_{idx}"
-                )
+                nc = st.number_input("완료 강의 수", value=s["completed_lectures"], 
+                                    min_value=0, max_value=nt, key=f"sc_{idx}")
+            
             c4, c5 = st.columns(2)
             with c4:
                 na = st.checkbox("활성화", s.get("active", True), key=f"sa_{idx}")
@@ -845,74 +787,71 @@ with tab_subjects:
                     save_subjects(subjects)
                     st.session_state.subjects = subjects
                     st.rerun()
+            
             if nn != s["name"] or nt != s["total_lectures"] or nc != s["completed_lectures"] or na != s.get("active", True):
-                subjects[idx] = {
-                    "name": nn,
-                    "total_lectures": nt,
-                    "completed_lectures": nc,
-                    "active": na,
-                }
+                subjects[idx] = {"name": nn, "total_lectures": nt, "completed_lectures": nc, "active": na}
                 save_subjects(subjects)
                 st.session_state.subjects = subjects
+    
     st.markdown("---\n### ➕ 새 과목")
     c1, c2 = st.columns(2)
     with c1:
         new_name = st.text_input("과목명", key="new_sn")
     with c2:
         new_total = st.number_input("총 강의 수", value=100, min_value=1, key="new_st")
+    
     if st.button("➕ 추가", type="primary"):
         if new_name:
-            subjects.append(
-                {
-                    "name": new_name,
-                    "total_lectures": new_total,
-                    "completed_lectures": 0,
-                    "active": True,
-                }
-            )
+            subjects.append({"name": new_name, "total_lectures": new_total, 
+                           "completed_lectures": 0, "active": True})
             save_subjects(subjects)
             st.session_state.subjects = subjects
             st.success(f"✅ '{new_name}' 추가됨")
             st.rerun()
 
+
 # ==================== 분석 ====================
 with tab_analysis:
     st.markdown("## 📊 분석")
+    
     if log_df.empty:
         st.info("기록이 없습니다. 루틴부터 시작하세요!")
     else:
         st.markdown("### 📆 주간 요약")
         week_ref = st.date_input("주 선택", today, key="wa")
         ws, we = get_week_range(week_ref)
+        
         mask = (log_df["date"] >= ws) & (log_df["date"] <= we)
         wd = log_df[mask]
+        
         if wd.empty:
             st.write("이 주에 기록 없음")
         else:
             tm = wd["estimated_minutes"].sum()
             th = round(tm / 60, 1)
             grade = "D-" if th < 18 else "A" if th < 22 else "B" if th < 27 else "C" if th < 32 else "S"
+            
             c1, c2 = st.columns(2)
-            with c1:
-                st.metric("주간 공부시간", f"{th}h")
-            with c2:
-                st.metric("주간 등급", f"{grade}", help=WEEKLY_GRADE_HINT)
+            with c1: st.metric("주간 공부시간", f"{th}h")
+            with c2: st.metric("주간 등급", f"{grade}", help=WEEKLY_GRADE_HINT)
+        
         st.markdown("---\n### 📈 장기 추세")
         ds = log_df.groupby("date")["estimated_minutes"].sum().reset_index()
         ds["hours"] = ds["estimated_minutes"] / 60
         st.line_chart(ds.set_index("date")["hours"], height=200)
+        
         l7 = today - timedelta(days=6)
         r = ds[(ds["date"] >= l7) & (ds["date"] <= today)]
         avg7 = r["hours"].mean() if not r.empty else 0
+        
         c1, c2 = st.columns(2)
-        with c1:
-            st.metric("최근 7일 평균", f"{avg7:.1f}h/일")
-        with c2:
-            st.metric("연속 출석", f"{streak}일")
+        with c1: st.metric("최근 7일 평균", f"{avg7:.1f}h/일")
+        with c2: st.metric("연속 출석", f"{streak}일")
 
+
+# ==================== 철학 ====================
 with tab_philosophy:
-    st.markdown(
-        """
+    st.markdown("""
 ## 📜 Jason 루틴 철학
 
 ### 🎯 목표
@@ -951,47 +890,31 @@ with tab_philosophy:
 ---
 
 > **"공부는 못해도 루틴은 깬 적 없다."**
-"""
-    )
+""")
 
+
+# ==================== 설정 ====================
 with tab_settings:
     st.markdown("## ⚙️ 설정")
-
+    
     c1, c2 = st.columns(2)
     with c1:
         new_start = st.date_input("루틴 시작일", config["_start_date_obj"], key="ss")
         new_target = st.date_input("목표 시험일", config["_target_exam_obj"], key="st_main")
     with c2:
         auto_flag = st.checkbox("Phase 자동 전환", config["auto_phase"], key="saf")
-        manual_phase_default = int(config.get("manual_phase", 1))
-        if manual_phase_default not in PHASE_LABELS:
-            manual_phase_default = 1
-        mp = st.selectbox(
-            "수동 고정 단계",
-            list(PHASE_LABELS.keys()),
-            index=list(PHASE_LABELS.keys()).index(manual_phase_default),
-            format_func=lambda x: PHASE_LABELS[x],
-            key="smp",
-        )
-
+        mp = st.selectbox("수동 고정 단계", list(PHASE_LABELS.keys()),
+                         index=config["manual_phase"]-1, format_func=lambda x: PHASE_LABELS[x], key="smp")
+    
     if st.button("💾 설정 저장", type="primary"):
-        config.update(
-            {
-                "start_date": new_start.isoformat(),
-                "target_exam": new_target.isoformat(),
-                "auto_phase": auto_flag,
-                "manual_phase": mp,
-                "_start_date_obj": new_start,
-                "_target_exam_obj": new_target,
-            }
-        )
+        config.update({
+            "start_date": new_start.isoformat(), "target_exam": new_target.isoformat(),
+            "auto_phase": auto_flag, "manual_phase": mp,
+            "_start_date_obj": new_start, "_target_exam_obj": new_target
+        })
         st.session_state.config = config
         save_config(config)
         st.success("✅ 저장 완료!")
-
-    st.markdown("---\n### 📂 데이터 저장소")
-    try:
-        sheet_url = st.secrets["gsheet"]["spreadsheet_url"]
-    except Exception:
-        sheet_url = "(secrets에 spreadsheet_url 없음)"
-    st.code(f"스프레드시트: {sheet_url}\n시트: config / log / subjects")
+    
+    st.markdown("---\n### 📂 데이터 파일")
+    st.code(f"설정: {CONFIG_PATH.resolve()}\n로그: {LOG_PATH.resolve()}\n과목: {SUBJECTS_PATH.resolve()}")
