@@ -5,6 +5,9 @@ from pathlib import Path
 import gspread
 from google.oauth2.service_account import Credentials
 import random
+import base64
+import hashlib
+import hmac
 
 # ----------------- 기본 설정 -----------------
 st.set_page_config(
@@ -12,6 +15,47 @@ st.set_page_config(
     page_icon="🎯",
     layout="wide",
 )
+
+def _decode_salt(s: str) -> bytes:
+    try:
+        return base64.b64decode(s)
+    except Exception:
+        return bytes.fromhex(s)
+
+def _verify_password(password: str) -> bool:
+    if "auth" not in st.secrets:
+        return False
+    auth = st.secrets["auth"]
+    if "password_hash" not in auth or "salt" not in auth:
+        return False
+    iterations = int(auth.get("iterations", 200_000))
+    salt = _decode_salt(auth["salt"])
+    derived = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, iterations)
+    expected = bytes.fromhex(auth["password_hash"])
+    return hmac.compare_digest(derived, expected)
+
+if "authenticated" not in st.session_state:
+    st.session_state.authenticated = False
+
+if "auth" not in st.secrets or "password_hash" not in st.secrets["auth"] or "salt" not in st.secrets["auth"]:
+    st.error("Secrets에 [auth] 설정이 필요합니다. (password_hash, salt, iterations)")
+    st.stop()
+
+if st.session_state.authenticated:
+    with st.sidebar:
+        if st.button("로그아웃"):
+            st.session_state.authenticated = False
+            st.rerun()
+else:
+    st.title("로그인")
+    password = st.text_input("비밀번호", type="password")
+    if st.button("로그인"):
+        if _verify_password(password):
+            st.session_state.authenticated = True
+            st.rerun()
+        else:
+            st.error("비밀번호가 올바르지 않습니다.")
+    st.stop()
 
 # ----------------- 커스텀 CSS -----------------
 st.markdown(
