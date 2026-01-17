@@ -225,6 +225,116 @@ def save_subjects(subjects: list):
         ws.append_row([s.get(h, "") for h in SUBJECT_HEADERS])
 
 
+def _normalize_plan_rows(rows: list, headers: list, int_fields=None, bool_fields=None) -> list:
+    normalized = []
+    int_fields = set(int_fields or [])
+    bool_fields = set(bool_fields or [])
+    for row in rows:
+        clean = {h: row.get(h, "") for h in headers}
+        for field in bool_fields:
+            clean[field] = _parse_bool(clean.get(field, False), default=False)
+        for field in int_fields:
+            try:
+                clean[field] = int(float(clean.get(field) or 0))
+            except Exception:
+                clean[field] = 0
+        normalized.append(clean)
+    return normalized
+
+
+def load_plan_sheet(name: str, headers: list, defaults: list, int_fields=None, bool_fields=None) -> list:
+    wb = get_workbook()
+    ws = ensure_worksheet(wb, name, headers)
+    rows = ws.get_all_records()
+    if not rows:
+        save_plan_sheet(name, headers, defaults)
+        return _normalize_plan_rows(defaults, headers, int_fields, bool_fields)
+    return _normalize_plan_rows(rows, headers, int_fields, bool_fields)
+
+
+def save_plan_sheet(name: str, headers: list, rows: list):
+    wb = get_workbook()
+    ws = ensure_worksheet(wb, name, headers)
+    ws.clear()
+    ws.append_row(headers)
+    if not rows:
+        return
+    out_rows = []
+    for row in rows:
+        out_rows.append([row.get(h, "") for h in headers])
+    ws.append_rows(out_rows)
+
+
+def load_plan_overview() -> list:
+    return load_plan_sheet("plan_overview", PLAN_OVERVIEW_HEADERS, PLAN_OVERVIEW_DEFAULT)
+
+
+def save_plan_overview(rows: list):
+    save_plan_sheet("plan_overview", PLAN_OVERVIEW_HEADERS, rows)
+
+
+def load_plan_weekly() -> list:
+    return load_plan_sheet("plan_weekly", PLAN_WEEKLY_HEADERS, PLAN_WEEKLY_DEFAULT)
+
+
+def save_plan_weekly(rows: list):
+    save_plan_sheet("plan_weekly", PLAN_WEEKLY_HEADERS, rows)
+
+
+def load_plan_friday() -> list:
+    return load_plan_sheet(
+        "plan_friday",
+        PLAN_FRIDAY_HEADERS,
+        PLAN_FRIDAY_DEFAULT,
+        int_fields=["week"],
+        bool_fields=["status"],
+    )
+
+
+def save_plan_friday(rows: list):
+    save_plan_sheet("plan_friday", PLAN_FRIDAY_HEADERS, rows)
+
+
+def load_plan_micro() -> list:
+    return load_plan_sheet(
+        "plan_micro",
+        PLAN_MICRO_HEADERS,
+        PLAN_MICRO_DEFAULT,
+        bool_fields=["status"],
+    )
+
+
+def save_plan_micro(rows: list):
+    save_plan_sheet("plan_micro", PLAN_MICRO_HEADERS, rows)
+
+
+def load_plan_logic() -> list:
+    return load_plan_sheet(
+        "plan_logic",
+        PLAN_LOGIC_HEADERS,
+        PLAN_LOGIC_DEFAULT,
+        int_fields=["round"],
+        bool_fields=["status"],
+    )
+
+
+def save_plan_logic(rows: list):
+    save_plan_sheet("plan_logic", PLAN_LOGIC_HEADERS, rows)
+
+
+def load_plan_baking() -> list:
+    return load_plan_sheet(
+        "plan_baking",
+        PLAN_BAKING_HEADERS,
+        PLAN_BAKING_DEFAULT,
+        bool_fields=["status"],
+    )
+
+
+def save_plan_baking(rows: list):
+    save_plan_sheet("plan_baking", PLAN_BAKING_HEADERS, rows)
+
+
 def load_log() -> pd.DataFrame:
     wb = get_workbook()
     ws = ensure_worksheet(wb, "log", LOG_HEADERS)
