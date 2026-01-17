@@ -119,6 +119,8 @@ DEFAULT_CONFIG = {
     "target_exam": "2027-01-01",
 }
 
+SHOW_EXCEL_TAB = True  # 엑셀 참고 탭 제거 시 False 또는 블록 삭제
+
 # ----------------- GSheet 클라이언트 -----------------
 
 def _parse_bool(value, default: bool = False) -> bool:
@@ -535,6 +537,18 @@ if "log_df" not in st.session_state:
     st.session_state.log_df = load_log()
 if "subjects" not in st.session_state:
     st.session_state.subjects = load_subjects()
+if SHOW_EXCEL_TAB and "plan_overview" not in st.session_state:
+    st.session_state.plan_overview = load_plan_overview()
+if SHOW_EXCEL_TAB and "plan_weekly" not in st.session_state:
+    st.session_state.plan_weekly = load_plan_weekly()
+if SHOW_EXCEL_TAB and "plan_friday" not in st.session_state:
+    st.session_state.plan_friday = load_plan_friday()
+if SHOW_EXCEL_TAB and "plan_micro" not in st.session_state:
+    st.session_state.plan_micro = load_plan_micro()
+if SHOW_EXCEL_TAB and "plan_logic" not in st.session_state:
+    st.session_state.plan_logic = load_plan_logic()
+if SHOW_EXCEL_TAB and "plan_baking" not in st.session_state:
+    st.session_state.plan_baking = load_plan_baking()
 
 config = st.session_state.config
 log_df = st.session_state.log_df
@@ -624,9 +638,12 @@ for d in unique_dates:
 # ----------------- 메인 -----------------
 st.markdown("# 🎯 Jason 루틴 플랫폼 (GSheet)")
 
-tab_dashboard, tab_routine, tab_subjects, tab_analysis, tab_philosophy, tab_settings = st.tabs(
-    ["🏠 대시보드", "✅ 오늘 루틴", "📚 과목 관리", "📊 분석", "📜 철학", "⚙️ 설정"]
-)
+tab_labels = ["🏠 대시보드", "✅ 오늘 루틴", "📚 과목 관리", "📊 분석", "📜 철학", "⚙️ 설정"]
+if SHOW_EXCEL_TAB:
+    tab_labels.append("📎 엑셀 플랜")
+tabs = st.tabs(tab_labels)
+tab_dashboard, tab_routine, tab_subjects, tab_analysis, tab_philosophy, tab_settings = tabs[:6]
+tab_excel = tabs[6] if SHOW_EXCEL_TAB else None
 
 # ==================== 대시보드 ====================
 with tab_dashboard:
@@ -953,6 +970,29 @@ with tab_philosophy:
 > **"공부는 못해도 루틴은 깬 적 없다."**
 """
     )
+
+if SHOW_EXCEL_TAB and tab_excel is not None:
+    with tab_excel:
+        st.markdown("## 📎 엑셀 플랜 확인용 탭")
+        st.caption("엑셀 내용을 그대로 확인하기 위한 전용 탭입니다. 제거하려면 SHOW_EXCEL_TAB=False 또는 이 블록 삭제")
+
+        st.markdown("### 🧭 Overview")
+        st.dataframe(pd.DataFrame(st.session_state.plan_overview), use_container_width=True)
+
+        st.markdown("### 🗓️ Weekly Timeblocks")
+        st.dataframe(pd.DataFrame(st.session_state.plan_weekly), use_container_width=True)
+
+        st.markdown("### 🔁 Friday Rotation")
+        st.dataframe(pd.DataFrame(st.session_state.plan_friday), use_container_width=True)
+
+        st.markdown("### 📆 12-Week Micro Plan")
+        st.dataframe(pd.DataFrame(st.session_state.plan_micro), use_container_width=True)
+
+        st.markdown("### 🎧 Logic Quick Checklist")
+        st.dataframe(pd.DataFrame(st.session_state.plan_logic), use_container_width=True)
+
+        st.markdown("### 🧁 Baking Quick Checklist")
+        st.dataframe(pd.DataFrame(st.session_state.plan_baking), use_container_width=True)
 
 with tab_settings:
     st.markdown("## ⚙️ 설정")
