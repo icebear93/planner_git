@@ -112,14 +112,340 @@ MODE_LABELS = {
 DAILY_GRADE_HINT = "일일 등급 기준: S ≥ 4.6h, C ≥ 3.9h, B ≥ 3.1h, A ≥ 2.5h, 그 미만 D-"
 WEEKLY_GRADE_HINT = "주간 등급 기준: S ≥ 32h, C ≥ 27h, B ≥ 22h, A ≥ 18h, 그 미만 D-"
 
+# ----------------- 엑셀 하드코딩 데이터 -----------------
+# NOTE: 엑셀 탭 제거 시 아래 상수와 관련 탭 블록만 삭제하면 됩니다.
+EXCEL_OVERVIEW = [
+    "Jason 실행 계획 (변리사 우선, 제과 필기/Logic 최소 유지) — 4월 전 제과 필기 목표",
+    "우선순위 1: 변리사 합격 (2년) — 기존 플랜 유지. 이 파일은 변리사 루틴을 깨지 않는 제과/Logic 슬롯만 정리.",
+    "우선순위 2: 제과기능사 필기 합격 — 4월 전 목표. 이론 20% + 기출 80% (초반 2주만 이론 비중 조금 더).",
+    "우선순위 3: Logic Pro ocean eyes 카피 — 초보 온보딩 유튜브 2~3편(총 60~90분) + 4회차 체크리스트 완주.",
+    "핵심 원칙: ① 변리사 시간표는 건드리지 않기 ② 제과/Logic은 확장 금지 ③ 금요일 저녁만 유지 슬롯 사용",
+    "체크 방식: Status는 ☐ / ☑ 표시",
+]
+
+EXCEL_WEEKLY_TIMEBLOCKS = [
+    {
+        "시간대/슬롯": "아침(출근 전)",
+        "월": "변리사",
+        "화": "변리사",
+        "수": "변리사",
+        "목": "변리사",
+        "금": "변리사",
+        "토": "변리사",
+        "일": "변리사",
+    },
+    {
+        "시간대/슬롯": "회사 짬(10~15m)",
+        "월": "휴식",
+        "화": "제과 이론(요약)",
+        "수": "휴식",
+        "목": "제과 이론(요약)",
+        "금": "휴식",
+        "토": "—",
+        "일": "—",
+    },
+    {
+        "시간대/슬롯": "퇴근 버스(20~30m)",
+        "월": "변리사(가벼운)",
+        "화": "제과 기출 15문제",
+        "수": "변리사(가벼운)",
+        "목": "제과 오답 10개",
+        "금": "변리사(가벼운)",
+        "토": "—",
+        "일": "—",
+    },
+    {
+        "시간대/슬롯": "퇴근 후(짧게)",
+        "월": "변리사",
+        "화": "변리사",
+        "수": "변리사",
+        "목": "변리사",
+        "금": "변리사",
+        "토": "변리사",
+        "일": "변리사",
+    },
+    {
+        "시간대/슬롯": "금요일 저녁(60~90m)",
+        "월": "—",
+        "화": "—",
+        "수": "—",
+        "목": "—",
+        "금": "로테이션(제과/Logic)\nLogic 주: 유튜브 2~3편 포함",
+        "토": "—",
+        "일": "—",
+    },
+    {
+        "시간대/슬롯": "주말 딥워크",
+        "월": "—",
+        "화": "—",
+        "수": "—",
+        "목": "—",
+        "금": "—",
+        "토": "변리사 7~10h",
+        "일": "변리사 6~8h",
+    },
+]
+
+EXCEL_FRIDAY_ROTATION = [
+    {
+        "주차": "1",
+        "타입": "제과",
+        "해야 할 일(딱 이것만)": "기출 50문제 + 오답 10개(키워드 1줄)",
+        "산출물(파일/기록)": "오답 키워드 10줄",
+        "Status(☐/☑)": "☐",
+    },
+    {
+        "주차": "2",
+        "타입": "Logic",
+        "해야 할 일(딱 이것만)": "온보딩 유튜브 2~3편(총 45~60분) 시청 → 템플릿/트랙 3개 + 템포/마커(구조) + 저장",
+        "산출물(파일/기록)": "ocean_eyes_copy_v1.logicx (+시청기록 메모 1줄)",
+        "Status(☐/☑)": "☐",
+    },
+    {
+        "주차": "3",
+        "타입": "제과",
+        "해야 할 일(딱 이것만)": "약점 기출 50문제 + 오답 10개",
+        "산출물(파일/기록)": "오답 키워드 10줄",
+        "Status(☐/☑)": "☐",
+    },
+    {
+        "주차": "4",
+        "타입": "Logic",
+        "해야 할 일(딱 이것만)": "회차2: 코드 4개(8마디 루프) + 패드 얇게 + 저장",
+        "산출물(파일/기록)": "ocean_eyes_copy_v2.logicx",
+        "Status(☐/☑)": "☐",
+    },
+    {
+        "주차": "5",
+        "타입": "제과",
+        "해야 할 일(딱 이것만)": "모의 1세트(시간) + 오답만 재풀이",
+        "산출물(파일/기록)": "점수 기록(날짜/점수)",
+        "Status(☐/☑)": "☐",
+    },
+    {
+        "주차": "6",
+        "타입": "Logic",
+        "해야 할 일(딱 이것만)": "회차3: 베이스(루트) + 공간감(리버브/딜레이) + 저장",
+        "산출물(파일/기록)": "ocean_eyes_copy_v3.logicx",
+        "Status(☐/☑)": "☐",
+    },
+    {
+        "주차": "7",
+        "타입": "제과",
+        "해야 할 일(딱 이것만)": "실전 2세트(시간) + 약점 반복",
+        "산출물(파일/기록)": "약점 목록 5개",
+        "Status(☐/☑)": "☐",
+    },
+    {
+        "주차": "8",
+        "타입": "Logic",
+        "해야 할 일(딱 이것만)": "회차4: 자동화 1개 + 끝까지 재생되면 완료",
+        "산출물(파일/기록)": "ocean_eyes_copy_v4_final.logicx",
+        "Status(☐/☑)": "☐",
+    },
+    {
+        "주차": "9",
+        "타입": "제과",
+        "해야 할 일(딱 이것만)": "최종 점검: 틀리는 파트만 100문제(쪼개서)",
+        "산출물(파일/기록)": "최종 약점 3개",
+        "Status(☐/☑)": "☐",
+    },
+    {
+        "주차": "10",
+        "타입": "Buffer",
+        "해야 할 일(딱 이것만)": "시험/컨디션/밀린 것 처리(제과 or Logic 중 1개)",
+        "산출물(파일/기록)": "메모 1줄",
+        "Status(☐/☑)": "☐",
+    },
+]
+
+EXCEL_MICRO_PLAN = [
+    {
+        "주차(시작)": "1주차 (2026-01-19)",
+        "회사 짬(화/목 10~15m)": "화: 제과 이론요약 1단원 / 목: 제과 이론요약 1단원",
+        "퇴근 버스(화/목 20~30m)": "화: 기출 15문제 / 목: 오답 10개",
+        "금요일(로테이션)": "Friday Rotation 시트",
+        "Logic 이번 주 목표": "(준비) 유튜브 입문 영상 2~3편 ‘저장’(나중에 볼 리스트) + 로직 설치/사운드 확인",
+        "제과 이번 주 목표": "범위 훑기 + 키워드 20개 표시",
+        "Status(☐/☑)": "☐",
+    },
+    {
+        "주차(시작)": "2주차 (2026-01-26)",
+        "회사 짬(화/목 10~15m)": "화: 제과 이론요약 1단원 / 목: 제과 이론요약 1단원",
+        "퇴근 버스(화/목 20~30m)": "화: 기출 15문제 / 목: 오답 10개",
+        "금요일(로테이션)": "Friday Rotation 시트",
+        "Logic 이번 주 목표": "(회차1) 유튜브 2~3편(총 45~60m) 보고 → 프로젝트/마커 구조 + v1 저장",
+        "제과 이번 주 목표": "이론 얇게 1회독(요약) + 기출 시작",
+        "Status(☐/☑)": "☐",
+    },
+    {
+        "주차(시작)": "3주차 (2026-02-02)",
+        "회사 짬(화/목 10~15m)": "화: 제과 이론요약 1단원 / 목: 제과 이론요약 1단원",
+        "퇴근 버스(화/목 20~30m)": "화: 기출 15문제 / 목: 오답 10개",
+        "금요일(로테이션)": "Friday Rotation 시트",
+        "Logic 이번 주 목표": "(휴식) 로직 쉬기",
+        "제과 이번 주 목표": "기출 1회전(전체) + 오답 키워드 누적",
+        "Status(☐/☑)": "☐",
+    },
+    {
+        "주차(시작)": "4주차 (2026-02-09)",
+        "회사 짬(화/목 10~15m)": "화: 제과 이론요약 1단원 / 목: 제과 이론요약 1단원",
+        "퇴근 버스(화/목 20~30m)": "화: 기출 15문제 / 목: 오답 10개",
+        "금요일(로테이션)": "Friday Rotation 시트",
+        "Logic 이번 주 목표": "(회차2) 코드 루프 + 패드",
+        "제과 이번 주 목표": "기출 2회전(약점 파트 집중)",
+        "Status(☐/☑)": "☐",
+    },
+    {
+        "주차(시작)": "5주차 (2026-02-16)",
+        "회사 짬(화/목 10~15m)": "화: 제과 이론요약 1단원 / 목: 제과 이론요약 1단원",
+        "퇴근 버스(화/목 20~30m)": "화: 기출 15문제 / 목: 오답 10개",
+        "금요일(로테이션)": "Friday Rotation 시트",
+        "Logic 이번 주 목표": "(휴식) 로직 쉬기",
+        "제과 이번 주 목표": "모의 1회(시간) + 오답만 재풀이",
+        "Status(☐/☑)": "☐",
+    },
+    {
+        "주차(시작)": "6주차 (2026-02-23)",
+        "회사 짬(화/목 10~15m)": "화: 제과 이론요약 1단원 / 목: 제과 이론요약 1단원",
+        "퇴근 버스(화/목 20~30m)": "화: 기출 15문제 / 목: 오답 10개",
+        "금요일(로테이션)": "Friday Rotation 시트",
+        "Logic 이번 주 목표": "(회차3) 베이스 + 공간감",
+        "제과 이번 주 목표": "모의 2회 + 약점 5개 고정",
+        "Status(☐/☑)": "☐",
+    },
+    {
+        "주차(시작)": "7주차 (2026-03-02)",
+        "회사 짬(화/목 10~15m)": "화: 제과 이론요약 1단원 / 목: 제과 이론요약 1단원",
+        "퇴근 버스(화/목 20~30m)": "화: 기출 15문제 / 목: 오답 10개",
+        "금요일(로테이션)": "Friday Rotation 시트",
+        "Logic 이번 주 목표": "(휴식) 로직 쉬기",
+        "제과 이번 주 목표": "약점 파트 집중(점수 안정화)",
+        "Status(☐/☑)": "☐",
+    },
+    {
+        "주차(시작)": "8주차 (2026-03-09)",
+        "회사 짬(화/목 10~15m)": "화: 제과 이론요약 1단원 / 목: 제과 이론요약 1단원",
+        "퇴근 버스(화/목 20~30m)": "화: 기출 15문제 / 목: 오답 10개",
+        "금요일(로테이션)": "Friday Rotation 시트",
+        "Logic 이번 주 목표": "(회차4) 자동화 + v4 저장",
+        "제과 이번 주 목표": "실전 세트 2회 + 컨디션 점검",
+        "Status(☐/☑)": "☐",
+    },
+    {
+        "주차(시작)": "9주차 (2026-03-16)",
+        "회사 짬(화/목 10~15m)": "화: 제과 이론요약 1단원 / 목: 제과 이론요약 1단원",
+        "퇴근 버스(화/목 20~30m)": "화: 기출 15문제 / 목: 오답 10개",
+        "금요일(로테이션)": "Friday Rotation 시트",
+        "Logic 이번 주 목표": "(정리) v1~v4 들어보고 1개만 수정",
+        "제과 이번 주 목표": "최종 약점 제거(틀리는 유형만)",
+        "Status(☐/☑)": "☐",
+    },
+    {
+        "주차(시작)": "10주차 (2026-03-23)",
+        "회사 짬(화/목 10~15m)": "화: 제과 이론요약 1단원 / 목: 제과 이론요약 1단원",
+        "퇴근 버스(화/목 20~30m)": "화: 기출 15문제 / 목: 오답 10개",
+        "금요일(로테이션)": "Friday Rotation 시트",
+        "Logic 이번 주 목표": "(버퍼) 필요 시만",
+        "제과 이번 주 목표": "시험 응시/직전 정리(틀린 것만)",
+        "Status(☐/☑)": "☐",
+    },
+    {
+        "주차(시작)": "11주차 (2026-03-30)",
+        "회사 짬(화/목 10~15m)": "화: 제과 이론요약 1단원 / 목: 제과 이론요약 1단원",
+        "퇴근 버스(화/목 20~30m)": "화: 기출 15문제 / 목: 오답 10개",
+        "금요일(로테이션)": "Friday Rotation 시트",
+        "Logic 이번 주 목표": "(버퍼) 필요 시만",
+        "제과 이번 주 목표": "(예비) 미응시 시 실전 세트 반복",
+        "Status(☐/☑)": "☐",
+    },
+    {
+        "주차(시작)": "12주차 (2026-04-06)",
+        "회사 짬(화/목 10~15m)": "화: 제과 이론요약 1단원 / 목: 제과 이론요약 1단원",
+        "퇴근 버스(화/목 20~30m)": "화: 기출 15문제 / 목: 오답 10개",
+        "금요일(로테이션)": "Friday Rotation 시트",
+        "Logic 이번 주 목표": "(마무리) 카피 v1 백업/정리",
+        "제과 이번 주 목표": "(예비) 미응시 시 마감",
+        "Status(☐/☑)": "☐",
+    },
+]
+
+EXCEL_LOGIC_CHECKLIST = [
+    {
+        "회차": "1",
+        "딱 할 일": "유튜브 초보 입문 2~3편(총 45~60분) 시청 → 새 프로젝트 → 템포 70~80 → 트랙 3개(Piano/Pad/Vocal Guide) → 마커 Intro/Verse/Chorus 표시",
+        "완료 기준": "영상 2~3편 시청 완료 + 1분 이상 재생 + 마커가 보임",
+        "파일명": "ocean_eyes_copy_v1.logicx",
+        "Status(☐/☑)": "☐",
+        "메모": "시청 영상 제목/채널 1줄만 적기",
+    },
+    {
+        "회차": "2",
+        "딱 할 일": "코드 4개로 8마디 루프(피아노) + 패드 얇게(리버브 send)",
+        "완료 기준": "8마디 반복이 자연스럽게 들림(완벽 X)",
+        "파일명": "ocean_eyes_copy_v2.logicx",
+        "Status(☐/☑)": "☐",
+        "메모": "",
+    },
+    {
+        "회차": "3",
+        "딱 할 일": "베이스(루트만) + 리버브/딜레이로 공간감",
+        "완료 기준": "보컬 자리(중역)가 너무 안 막힘",
+        "파일명": "ocean_eyes_copy_v3.logicx",
+        "Status(☐/☑)": "☐",
+        "메모": "",
+    },
+    {
+        "회차": "4",
+        "딱 할 일": "볼륨/리버브 자동화 1개 + 끝까지 재생",
+        "완료 기준": "처음~끝까지 재생 가능",
+        "파일명": "ocean_eyes_copy_v4_final.logicx",
+        "Status(☐/☑)": "☐",
+        "메모": "",
+    },
+]
+
+EXCEL_BAKING_CHECKLIST = [
+    {
+        "구간": "1~2주",
+        "주당 시간": "주 2~3h",
+        "할 일": "이론 요약 1회독(얇게) + 기출 시작",
+        "완료 기준": "전체 범위를 빈칸 없이 훑음",
+        "Status(☐/☑)": "☐",
+        "메모": "",
+    },
+    {
+        "구간": "3~6주",
+        "주당 시간": "주 2~3h",
+        "할 일": "기출 1~2회전(오답은 키워드 1줄)",
+        "완료 기준": "약점 파트가 ‘이름’으로 정리됨",
+        "Status(☐/☑)": "☐",
+        "메모": "",
+    },
+    {
+        "구간": "7~9주",
+        "주당 시간": "주 2~3h",
+        "할 일": "실전 세트 반복(시간) + 약점 제거",
+        "완료 기준": "점수 변동 폭 감소",
+        "Status(☐/☑)": "☐",
+        "메모": "",
+    },
+    {
+        "구간": "10~12주",
+        "주당 시간": "주 1~2h",
+        "할 일": "최종 점검(틀리는 유형만) + 시험 응시",
+        "완료 기준": "응시 완료",
+        "Status(☐/☑)": "☐",
+        "메모": "",
+    },
+]
+
 DEFAULT_CONFIG = {
     "start_date": date.today().isoformat(),
     "auto_phase": True,
     "manual_phase": 1,
     "target_exam": "2027-01-01",
 }
-
-SHOW_EXCEL_TAB = True  # 엑셀 참고 탭 제거 시 False 또는 블록 삭제
 
 # ----------------- GSheet 클라이언트 -----------------
 
@@ -223,116 +549,6 @@ def save_subjects(subjects: list):
     ws.append_row(SUBJECT_HEADERS)
     for s in subjects:
         ws.append_row([s.get(h, "") for h in SUBJECT_HEADERS])
-
-
-def _normalize_plan_rows(rows: list, headers: list, int_fields=None, bool_fields=None) -> list:
-    normalized = []
-    int_fields = set(int_fields or [])
-    bool_fields = set(bool_fields or [])
-    for row in rows:
-        clean = {h: row.get(h, "") for h in headers}
-        for field in bool_fields:
-            clean[field] = _parse_bool(clean.get(field, False), default=False)
-        for field in int_fields:
-            try:
-                clean[field] = int(float(clean.get(field) or 0))
-            except Exception:
-                clean[field] = 0
-        normalized.append(clean)
-    return normalized
-
-
-def load_plan_sheet(name: str, headers: list, defaults: list, int_fields=None, bool_fields=None) -> list:
-    wb = get_workbook()
-    ws = ensure_worksheet(wb, name, headers)
-    rows = ws.get_all_records()
-    if not rows:
-        save_plan_sheet(name, headers, defaults)
-        return _normalize_plan_rows(defaults, headers, int_fields, bool_fields)
-    return _normalize_plan_rows(rows, headers, int_fields, bool_fields)
-
-
-def save_plan_sheet(name: str, headers: list, rows: list):
-    wb = get_workbook()
-    ws = ensure_worksheet(wb, name, headers)
-    ws.clear()
-    ws.append_row(headers)
-    if not rows:
-        return
-    out_rows = []
-    for row in rows:
-        out_rows.append([row.get(h, "") for h in headers])
-    ws.append_rows(out_rows)
-
-
-def load_plan_overview() -> list:
-    return load_plan_sheet("plan_overview", PLAN_OVERVIEW_HEADERS, PLAN_OVERVIEW_DEFAULT)
-
-
-def save_plan_overview(rows: list):
-    save_plan_sheet("plan_overview", PLAN_OVERVIEW_HEADERS, rows)
-
-
-def load_plan_weekly() -> list:
-    return load_plan_sheet("plan_weekly", PLAN_WEEKLY_HEADERS, PLAN_WEEKLY_DEFAULT)
-
-
-def save_plan_weekly(rows: list):
-    save_plan_sheet("plan_weekly", PLAN_WEEKLY_HEADERS, rows)
-
-
-def load_plan_friday() -> list:
-    return load_plan_sheet(
-        "plan_friday",
-        PLAN_FRIDAY_HEADERS,
-        PLAN_FRIDAY_DEFAULT,
-        int_fields=["week"],
-        bool_fields=["status"],
-    )
-
-
-def save_plan_friday(rows: list):
-    save_plan_sheet("plan_friday", PLAN_FRIDAY_HEADERS, rows)
-
-
-def load_plan_micro() -> list:
-    return load_plan_sheet(
-        "plan_micro",
-        PLAN_MICRO_HEADERS,
-        PLAN_MICRO_DEFAULT,
-        bool_fields=["status"],
-    )
-
-
-def save_plan_micro(rows: list):
-    save_plan_sheet("plan_micro", PLAN_MICRO_HEADERS, rows)
-
-
-def load_plan_logic() -> list:
-    return load_plan_sheet(
-        "plan_logic",
-        PLAN_LOGIC_HEADERS,
-        PLAN_LOGIC_DEFAULT,
-        int_fields=["round"],
-        bool_fields=["status"],
-    )
-
-
-def save_plan_logic(rows: list):
-    save_plan_sheet("plan_logic", PLAN_LOGIC_HEADERS, rows)
-
-
-def load_plan_baking() -> list:
-    return load_plan_sheet(
-        "plan_baking",
-        PLAN_BAKING_HEADERS,
-        PLAN_BAKING_DEFAULT,
-        bool_fields=["status"],
-    )
-
-
-def save_plan_baking(rows: list):
-    save_plan_sheet("plan_baking", PLAN_BAKING_HEADERS, rows)
 
 
 def load_log() -> pd.DataFrame:
@@ -647,18 +863,6 @@ if "log_df" not in st.session_state:
     st.session_state.log_df = load_log()
 if "subjects" not in st.session_state:
     st.session_state.subjects = load_subjects()
-if SHOW_EXCEL_TAB and "plan_overview" not in st.session_state:
-    st.session_state.plan_overview = load_plan_overview()
-if SHOW_EXCEL_TAB and "plan_weekly" not in st.session_state:
-    st.session_state.plan_weekly = load_plan_weekly()
-if SHOW_EXCEL_TAB and "plan_friday" not in st.session_state:
-    st.session_state.plan_friday = load_plan_friday()
-if SHOW_EXCEL_TAB and "plan_micro" not in st.session_state:
-    st.session_state.plan_micro = load_plan_micro()
-if SHOW_EXCEL_TAB and "plan_logic" not in st.session_state:
-    st.session_state.plan_logic = load_plan_logic()
-if SHOW_EXCEL_TAB and "plan_baking" not in st.session_state:
-    st.session_state.plan_baking = load_plan_baking()
 
 config = st.session_state.config
 log_df = st.session_state.log_df
@@ -748,12 +952,9 @@ for d in unique_dates:
 # ----------------- 메인 -----------------
 st.markdown("# 🎯 Jason 루틴 플랫폼 (GSheet)")
 
-tab_labels = ["🏠 대시보드", "✅ 오늘 루틴", "📚 과목 관리", "📊 분석", "📜 철학", "⚙️ 설정"]
-if SHOW_EXCEL_TAB:
-    tab_labels.append("📎 엑셀 플랜")
-tabs = st.tabs(tab_labels)
-tab_dashboard, tab_routine, tab_subjects, tab_analysis, tab_philosophy, tab_settings = tabs[:6]
-tab_excel = tabs[6] if SHOW_EXCEL_TAB else None
+tab_dashboard, tab_routine, tab_subjects, tab_analysis, tab_excel, tab_philosophy, tab_settings = st.tabs(
+    ["🏠 대시보드", "✅ 오늘 루틴", "📚 과목 관리", "📊 분석", "🧾 엑셀 플랜", "📜 철학", "⚙️ 설정"]
+)
 
 # ==================== 대시보드 ====================
 with tab_dashboard:
@@ -1037,6 +1238,30 @@ with tab_analysis:
         with c2:
             st.metric("연속 출석", f"{streak}일")
 
+# ==================== 엑셀 플랜 ====================
+with tab_excel:
+    st.markdown("## 🧾 엑셀 플랜 (하드코딩)")
+    st.caption("이 탭은 엑셀 내용을 그대로 옮겨둔 것으로, 제거 시 이 블록과 상수만 삭제하면 됩니다.")
+
+    st.markdown("### ✅ Overview")
+    for item in EXCEL_OVERVIEW:
+        st.markdown(f"- {item}")
+
+    st.markdown("### 🗓️ Weekly Timeblocks")
+    st.dataframe(pd.DataFrame(EXCEL_WEEKLY_TIMEBLOCKS), use_container_width=True)
+
+    st.markdown("### 🌙 Friday Rotation")
+    st.dataframe(pd.DataFrame(EXCEL_FRIDAY_ROTATION), use_container_width=True)
+
+    st.markdown("### 📆 12-Week Micro Plan")
+    st.dataframe(pd.DataFrame(EXCEL_MICRO_PLAN), use_container_width=True)
+
+    st.markdown("### 🎧 Logic Quick Checklist")
+    st.dataframe(pd.DataFrame(EXCEL_LOGIC_CHECKLIST), use_container_width=True)
+
+    st.markdown("### 🧁 Baking Quick Checklist")
+    st.dataframe(pd.DataFrame(EXCEL_BAKING_CHECKLIST), use_container_width=True)
+
 with tab_philosophy:
     st.markdown(
         """
@@ -1080,29 +1305,6 @@ with tab_philosophy:
 > **"공부는 못해도 루틴은 깬 적 없다."**
 """
     )
-
-if SHOW_EXCEL_TAB and tab_excel is not None:
-    with tab_excel:
-        st.markdown("## 📎 엑셀 플랜 확인용 탭")
-        st.caption("엑셀 내용을 그대로 확인하기 위한 전용 탭입니다. 제거하려면 SHOW_EXCEL_TAB=False 또는 이 블록 삭제")
-
-        st.markdown("### 🧭 Overview")
-        st.dataframe(pd.DataFrame(st.session_state.plan_overview), use_container_width=True)
-
-        st.markdown("### 🗓️ Weekly Timeblocks")
-        st.dataframe(pd.DataFrame(st.session_state.plan_weekly), use_container_width=True)
-
-        st.markdown("### 🔁 Friday Rotation")
-        st.dataframe(pd.DataFrame(st.session_state.plan_friday), use_container_width=True)
-
-        st.markdown("### 📆 12-Week Micro Plan")
-        st.dataframe(pd.DataFrame(st.session_state.plan_micro), use_container_width=True)
-
-        st.markdown("### 🎧 Logic Quick Checklist")
-        st.dataframe(pd.DataFrame(st.session_state.plan_logic), use_container_width=True)
-
-        st.markdown("### 🧁 Baking Quick Checklist")
-        st.dataframe(pd.DataFrame(st.session_state.plan_baking), use_container_width=True)
 
 with tab_settings:
     st.markdown("## ⚙️ 설정")
